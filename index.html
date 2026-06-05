@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Web-Based 3D Open-World RPG Engine Skeleton - Consuming procedural JSON data from the World Generator to construct an interactive 3D world.">
+  <title>RPG Engine (Aerthos Edition)</title>
+  <link rel="stylesheet" href="./index.css">
+</head>
+<body>
+  <!-- Three.js Canvas Container -->
+  <main id="canvas-container" aria-label="3D World Navigation Canvas"></main>
+
+  <!-- Interactive HUD Overlay -->
+  <div id="hud-overlay">
+    <!-- Header Banner -->
+    <header class="glass-panel" id="hud-header">
+      <h1 id="world-title">Aerthos</h1>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <div id="hud-clock" class="seed-tag" style="background: rgba(124, 77, 255, 0.15); border-color: rgba(124, 77, 255, 0.3); color: #d1c4e9; font-weight: bold; display: flex; align-items: center; gap: 6px;">
+          <span id="clock-sun-moon-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ffb300; box-shadow: 0 0 8px #ffb300; transition: all 0.3s ease;"></span>
+          <span id="time-display">08:00</span>
+        </div>
+        <div id="world-seed" class="seed-tag">Seed: Ingestion Pending</div>
+        <div id="visual-theme" class="seed-tag" style="background: rgba(0, 229, 255, 0.15); border-color: rgba(0, 229, 255, 0.3); color: #e0f7fa; font-weight: bold;">Theme: Fantasy</div>
+      </div>
+    </header>
+
+    <!-- Left Sidebar: World Info & Cultural Territories -->
+    <aside class="sidebar glass-panel" aria-label="World Information Panel">
+      <section>
+        <h2 class="section-title">World Lore</h2>
+        <div class="info-grid">
+          <div class="info-label">Name:</div>
+          <div class="info-value" id="lore-name">-</div>
+          <div class="info-label">Era:</div>
+          <div class="info-value" id="lore-era">-</div>
+        </div>
+        <p class="lore-myth" id="lore-myth" style="margin-top: 12px;"></p>
+      </section>
+
+      <section style="margin-top: 20px;">
+        <h2 class="section-title">Cultural Center Map</h2>
+        <div class="minimap-container">
+          <canvas id="minimap" width="256" height="256"></canvas>
+          <div id="minimap-legend" style="font-size: 0.8rem; width: 100%; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;"></div>
+        </div>
+      </section>
+
+      <section style="margin-top: 20px;">
+        <h2 class="section-title">Region Info</h2>
+        <div class="info-grid">
+          <div class="info-label">Active Territory:</div>
+          <div class="info-value" id="player-culture">-</div>
+          <div class="info-label">Culture Center:</div>
+          <div class="info-value" id="culture-center">-</div>
+        </div>
+      </section>
+
+      <section style="margin-top: 20px;">
+        <h2 class="section-title">Territory Customs</h2>
+        <div class="info-grid" style="grid-template-columns: 1fr; gap: 8px;">
+          <div>
+            <div class="info-label" style="text-align: left; margin-bottom: 4px;">Core Values:</div>
+            <div id="culture-values" style="font-size: 0.85rem; font-weight: 600; line-height: 1.4; color: var(--text-highlight);"></div>
+          </div>
+          <div style="margin-top: 6px;">
+            <div class="info-label" style="text-align: left; margin-bottom: 4px;">Traditions:</div>
+            <ul id="culture-traditions" style="font-size: 0.85rem; padding-left: 16px; color: var(--text-muted); line-height: 1.5; text-align: left; list-style-type: square;"></ul>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Bottom Coordinates / Status HUD -->
+  <section id="status-hud" class="glass-panel" aria-label="Player Coordinates Dashboard">
+    <div style="display: flex; gap: 24px;">
+      <div class="stat-item">
+        <span class="stat-label">Position X</span>
+        <span class="stat-value" id="pos-x">0.00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Elevation Y</span>
+        <span class="stat-value" id="pos-y">0.00</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Position Z</span>
+        <span class="stat-value" id="pos-z">0.00</span>
+      </div>
+    </div>
+    <div style="width: 100%; display: flex; flex-direction: column; gap: 2px;">
+      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+        <span>Stamina</span>
+        <span id="stamina-percent">100%</span>
+      </div>
+      <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05);">
+        <div id="stamina-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #00e5ff, #7c4dff); transition: width 0.05s linear; box-shadow: 0 0 8px rgba(0,229,255,0.4);"></div>
+      </div>
+    </div>
+    <div style="width: 100%; display: flex; flex-direction: column; gap: 2px; margin-top: 4px;">
+      <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+        <span>Adrenaline</span>
+        <span id="adrenaline-percent">0%</span>
+      </div>
+      <div style="width: 100%; height: 6px; background: rgba(255, 255, 255, 0.1); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.05);">
+        <div id="adrenaline-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff9100, #ff3d00); transition: width 0.05s linear; box-shadow: 0 0 8px rgba(255,61,0,0.4);"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Controls Guide Overlay -->
+  <section id="controls-guide" class="glass-panel" aria-label="Controls Guide">
+    <h3 style="font-size: 0.9rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-highlight);">Navigation Controls</h3>
+    <ul class="controls-list">
+      <li><span>Move</span> <span><kbd class="key-cap">W</kbd> <kbd class="key-cap">A</kbd> <kbd class="key-cap">S</kbd> <kbd class="key-cap">D</kbd></span></li>
+      <li><span>Sprint</span> <span>Hold <kbd class="key-cap">Shift</kbd></span></li>
+      <li><span>Rotate View</span> <span>Drag Mouse</span></li>
+      <li><span>Zoom View</span> <span>Scroll Wheel</span></li>
+      <li><span>Jump</span> <span><kbd class="key-cap">Space</kbd></span></li>
+    </ul>
+  </section>
+
+  <!-- Interaction Prompt Overlay -->
+  <div id="interaction-prompt" class="glass-panel" style="display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); padding: 12px 24px; pointer-events: none; z-index: 15; font-size: 1rem; border-color: rgba(0, 229, 255, 0.4); box-shadow: 0 0 15px rgba(0, 229, 255, 0.2); font-weight: 600; letter-spacing: 0.5px;">
+    Press <kbd class="key-cap" style="background: var(--accent-color); border-color: rgba(255,255,255,0.4); box-shadow: none;">E</kbd> to Interact
+  </div>
+
+  <!-- Dialogue Box Overlay -->
+  <div id="dialogue-box" class="glass-panel" style="display: none; position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); width: 620px; max-width: 90%; min-height: 150px; padding: 22px 26px; z-index: 20; flex-direction: column; gap: 12px; pointer-events: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+      <span id="dialogue-speaker" style="font-family: 'Cinzel', serif; font-weight: bold; color: var(--text-highlight); font-size: 1.15rem; letter-spacing: 0.5px;">Speaker Name</span>
+      <span id="dialogue-context" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Context</span>
+    </div>
+    <p id="dialogue-text" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-main); min-height: 48px; text-align: left;"></p>
+    <div id="dialogue-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
+      <!-- Dynamic option buttons go here -->
+    </div>
+  </div>
+
+  <!-- Fullscreen Loading Overlay -->
+  <div id="loading-overlay" aria-live="polite">
+    <div class="loader-portal" role="presentation"></div>
+    <div class="loading-text">Constructing Aerthos</div>
+    <div class="loading-sub">Compiling heightmap and generating terrain meshes...</div>
+  </div>
+
+  <!-- Vite App Entry Point -->
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
