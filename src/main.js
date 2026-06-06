@@ -4,6 +4,7 @@ import { Player } from './player.js';
 import { initUI, updateHUD, updateMinimap, hideLoadingScreen } from './ui.js';
 import { updateAtmosphere } from './atmosphere.js';
 import { spawnEcology } from './ecology.js';
+import { loadThemeConfig } from './themeConfig.js';
 import { 
   updateTimeCycle, 
   getTimeString, 
@@ -244,12 +245,15 @@ function talkToCultureCenter(culture) {
 // Asynchronously load the world generator data
 async function loadWorldData() {
   try {
-    const response = await fetch('./world.json');
+    const response = await fetch('./game/config/world.json');
     if (!response.ok) {
       throw new Error(`Failed to fetch world.json: ${response.statusText}`);
     }
     
     worldData = await response.json();
+    
+    // Load theme configuration
+    await loadThemeConfig();
     
     // Ingest and construct modules
     initTerrainData(worldData);
@@ -260,7 +264,7 @@ async function loadWorldData() {
     // Spawn procedural vegetation and ruins
     ecologyGroup = spawnEcology(scene, worldData.seed);
     
-    initUI(worldData);
+    await initUI(worldData);
     
     // Instantiate Player with custom controls & camera follow rig
     player = new Player(scene, camera, renderer.domElement);
@@ -441,7 +445,19 @@ function animate() {
   updateQuests(scene, player, dt);
   
   // Refresh HUD readings & minimap
-  updateHUD(player.position, player.stamina, player.adrenaline, getTimeString(), isNight());
+  updateHUD(
+    player.position,
+    player.health,
+    player.maxHealth,
+    player.stamina,
+    player.maxStamina,
+    player.adrenaline,
+    player.maxAdrenaline,
+    player.magic,
+    player.maxMagic,
+    getTimeString(),
+    isNight()
+  );
   updateMinimap(player.position, SPACING);
 
   // Render the frame

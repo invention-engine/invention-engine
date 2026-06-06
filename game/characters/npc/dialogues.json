@@ -1,0 +1,14 @@
+{
+  "Wildlands Huntmaster": {
+    "greeting": "The spectral beast wanders the woods. Follow the light beacon to hunt it and restore balance.",
+    "context": "Wildlands Hunt"
+  },
+  "Astellian Observatory": {
+    "greeting": "Observe the cosmic alignment. Return at night to perform the stargazer's vigil.",
+    "context": "Observation Core"
+  },
+  "Slovan Shrine": {
+    "greeting": "Bind your spirit to the hearthstone. The path ahead is treacherous.",
+    "context": "Hearthstone Blessing"
+  }
+}

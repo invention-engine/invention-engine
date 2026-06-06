@@ -1,0 +1,8 @@
+{
+  "bars": [
+    { "id": "health", "name": "Health", "color": "linear-gradient(90deg, #ff5252, #ff1744)" },
+    { "id": "stamina", "name": "Stamina", "color": "linear-gradient(90deg, #00e5ff, #7c4dff)" },
+    { "id": "adrenaline", "name": "Adrenaline", "color": "linear-gradient(90deg, #ffea00, #ffd600)" },
+    { "id": "magic", "name": "Magic", "color": "linear-gradient(90deg, #7c4dff, #b388ff)" }
+  ]
+}

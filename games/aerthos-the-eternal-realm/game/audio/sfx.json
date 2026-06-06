@@ -1,0 +1,5 @@
+{
+  "jump": "audio/sfx/jump.mp3",
+  "attack": "audio/sfx/attack.mp3",
+  "footstep": "audio/sfx/footstep.mp3"
+}

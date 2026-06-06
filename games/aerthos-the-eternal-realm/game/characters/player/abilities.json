@@ -1,0 +1,12 @@
+{
+  "spells": [
+    { "id": "blink", "name": "Blink Strike", "manaCost": 15, "adrenalineReq": 20, "description": "Teleport forward and strike enemies." },
+    { "id": "heal", "name": "Lunar Mending", "manaCost": 25, "adrenalineReq": 0, "description": "Heals the player crystal." }
+  ],
+  "baseStats": {
+    "health": 100,
+    "magic": 50,
+    "stamina": 100,
+    "adrenaline": 0
+  }
+}

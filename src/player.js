@@ -1,6 +1,8 @@
 import * as THREE from 'three';
+import { UIState, getState as getUIState, setState, toggleMenu, toggleInventory, toggleSettings } from './uiState.js';
 import { getTerrainHeight, getTerrainSlope, SPACING, GRID_WIDTH } from './terrain.js';
 import { obstacles } from './ecology.js';
+import { createPlayerMesh } from '../game/characters/player/model.js';
 
 export class Player {
   constructor(scene, camera, domElement) {
@@ -13,12 +15,19 @@ export class Player {
     this.sprintSpeed = 7.778;        // 28.0 km/h (full sprint)
     this.exhaustedSprintSpeed = 3.056; // 11.0 km/h (exhausted sprint)
     this.speed = this.walkSpeed;
+    // Player Health & Magic
+    this.maxHealth = 100.0;
+    this.health = this.maxHealth;
+    this.maxMagic = 50.0;
+    this.magic = this.maxMagic;
     
     // Jump mechanics (base variables)
     this.gravity = 18.0;
     this.jumpForce = 5.8;
     this.verticalVelocity = 0;
     this.isGrounded = true;
+    this.jumpsRemaining = 2;
+    this.prevSpace = false;
 
     // Stamina System
     this.stamina = 100.0;
@@ -49,13 +58,13 @@ export class Player {
     this.radius = 0.4;
 
     // Closer Camera Orbit Setup (Third-person follow view)
-    this.cameraDistance = 6.0;
-    this.minCameraDistance = 3.0;
+    this.cameraDistance = 4.0; // Closer third-person view
+    this.minCameraDistance = 2.0;
     this.maxCameraDistance = 20.0;
     this.theta = 0; // Horizontal orbit angle (radians)
     this.phi = Math.PI / 8; // Vertical orbit angle (radians, ~22.5 degrees)
-    this.minPhi = 0.02;
-    this.maxPhi = Math.PI / 2.3; // Avoid looking directly straight down
+    this.minPhi = -75 * Math.PI / 180; // Allow looking 75 degrees up
+    this.maxPhi = Math.PI / 2; // Allow looking 90 degrees down (top-down view)
     
     this.targetCameraDistance = this.cameraDistance;
     this.cameraTarget = new THREE.Vector3().copy(this.position);
@@ -74,64 +83,13 @@ export class Player {
   }
 
   createAvatar() {
-    this.group = new THREE.Group();
-    
-    // Core floating crystal (scaled down to fit realistic human size)
-    const crystalGeo = new THREE.OctahedronGeometry(0.35, 0);
-    this.crystalMat = new THREE.MeshStandardMaterial({
-      color: 0x9c27b0,
-      emissive: 0x7b1fa2,
-      emissiveIntensity: 1.5,
-      metalness: 0.9,
-      roughness: 0.1,
-      flatShading: true
-    });
-    this.crystal = new THREE.Mesh(crystalGeo, this.crystalMat);
-    this.crystal.position.y = 1.0; // Floating height relative to ground
-    this.crystal.castShadow = true;
-    this.group.add(this.crystal);
-
-    // Inner glowing sphere (scaled down)
-    const glowGeo = new THREE.SphereGeometry(0.18, 16, 16);
-    this.glowMat = new THREE.MeshBasicMaterial({
-      color: 0x00e5ff
-    });
-    this.glow = new THREE.Mesh(glowGeo, this.glowMat);
-    this.glow.position.copy(this.crystal.position);
-    this.group.add(this.glow);
-
-    // Orbiting Ring 1 (scaled down)
-    const ring1Geo = new THREE.TorusGeometry(0.7, 0.018, 8, 48);
-    this.ring1Mat = new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
-      emissive: 0x00e5ff,
-      emissiveIntensity: 0.8,
-      roughness: 0.2
-    });
-    this.ring1 = new THREE.Mesh(ring1Geo, this.ring1Mat);
-    this.ring1.position.copy(this.crystal.position);
-    this.ring1.rotation.x = Math.PI / 4;
-    this.group.add(this.ring1);
-
-    // Orbiting Ring 2 (scaled down)
-    const ring2Geo = new THREE.TorusGeometry(0.85, 0.015, 8, 48);
-    this.ring2Mat = new THREE.MeshStandardMaterial({
-      color: 0xe040fb,
-      emissive: 0xe040fb,
-      emissiveIntensity: 0.8,
-      roughness: 0.2
-    });
-    this.ring2 = new THREE.Mesh(ring2Geo, this.ring2Mat);
-    this.ring2.position.copy(this.crystal.position);
-    this.ring2.rotation.y = Math.PI / 4;
-    this.group.add(this.ring2);
-
-    // Light caster at player's location (scaled range and intensity)
-    this.light = new THREE.PointLight(0x7c4dff, 2.0, 15);
-    this.light.position.copy(this.crystal.position);
-    this.light.castShadow = true;
-    this.light.shadow.bias = -0.001;
-    this.group.add(this.light);
+    const assets = createPlayerMesh();
+    this.group = assets.group;
+    this.crystal = assets.crystal;
+    this.glow = assets.glow;
+    this.ring1 = assets.ring1;
+    this.ring2 = assets.ring2;
+    this.light = assets.light;
 
     this.group.position.copy(this.position);
     this.scene.add(this.group);
@@ -151,6 +109,17 @@ export class Player {
         this.keys.space = true;
         e.preventDefault(); // Stop scrolling standard page
       }
+      if (k === 'i') {
+        toggleInventory();
+      }
+      // Release pointer lock or resume on Escape
+      if (e.key === 'Escape') {
+        if (getUIState() === UIState.PAUSE) {
+          setState(UIState.GAME);
+        } else if (document.exitPointerLock) {
+          document.exitPointerLock();
+        }
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -163,23 +132,33 @@ export class Player {
       if (e.key === ' ') this.keys.space = false;
     });
 
-    // Mouse drag and short-click detection for attacking
+    // Mouse drag and short-click detection for attacking and camera control
     this.domElement.addEventListener('mousedown', (e) => {
+      if (getUIState() !== UIState.GAME) return;
       this.isMouseDown = true;
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
       this.mouseDownPosition = { x: e.clientX, y: e.clientY };
       this.mouseDownTime = performance.now();
+      // Request pointer lock for camera movement
+      if (this.domElement.requestPointerLock) {
+        this.domElement.requestPointerLock();
+      }
     });
 
     window.addEventListener('mousemove', (e) => {
-      if (!this.isMouseDown) return;
-      
-      const deltaX = e.clientX - this.previousMousePosition.x;
-      const deltaY = e.clientY - this.previousMousePosition.y;
+      if (getUIState() !== UIState.GAME) return;
+      // Allow camera rotation when mouse is down or pointer is locked
+      if (!this.isMouseDown && !document.pointerLockElement) return;
 
-      const sensitivity = 0.005;
+      const deltaX = e.movementX !== undefined ? e.movementX : e.clientX - this.previousMousePosition.x;
+      const deltaY = e.movementY !== undefined ? e.movementY : e.clientY - this.previousMousePosition.y;
+      
+      const userSensitivity = (window.gameSettings ? (window.gameSettings.sensitivity / 100) : 1.0);
+      const invertYMultiplier = (window.gameSettings && window.gameSettings.invertY) ? -1.0 : 1.0;
+      
+      const sensitivity = 0.005 * userSensitivity;
       this.theta -= deltaX * sensitivity;
-      this.phi = Math.max(this.minPhi, Math.min(this.maxPhi, this.phi + deltaY * sensitivity));
+      this.phi = Math.max(this.minPhi, Math.min(this.maxPhi, this.phi + deltaY * sensitivity * invertYMultiplier));
 
       this.previousMousePosition = { x: e.clientX, y: e.clientY };
     });
@@ -233,11 +212,11 @@ export class Player {
     const right = new THREE.Vector3(-Math.cos(this.theta), 0, Math.sin(this.theta)).normalize();
 
     const moveDirection = new THREE.Vector3();
-    if (!isDialogueActive) {
+    if (!isDialogueActive && getUIState() === UIState.GAME) {
       if (this.keys.w) moveDirection.add(forward);
       if (this.keys.s) moveDirection.add(forward.clone().negate());
       if (this.keys.a) moveDirection.add(right.clone().negate());
-      if (this.keys.d) moveDirection.add(right);
+      if (this.keys.d) moveDirection.add(right.clone().negate());
     }
 
     const isMoving = moveDirection.lengthSq() > 0;
@@ -336,38 +315,55 @@ export class Player {
     });
 
     // 7. Map boundary check to prevent player from running off map bounds
+    // Ensure player stays above terrain after horizontal movement
+    const currentGroundHeight = getTerrainHeight(this.position.x, this.position.z);
+    if (this.position.y < currentGroundHeight) {
+      this.position.y = currentGroundHeight;
+      this.isGrounded = true;
+      this.verticalVelocity = 0;
+    }
     const maxBound = (GRID_WIDTH - 1.1) * SPACING;
     this.position.x = Math.max(5, Math.min(maxBound, this.position.x));
     this.position.z = Math.max(5, Math.min(maxBound, this.position.z));
 
-    // 8. Jump physics influenced by Stamina & Adrenaline
+    // 8. Jump physics with single/double jump control
     const groundHeight = getTerrainHeight(this.position.x, this.position.z);
-
+    // Reset jump count when grounded
     if (this.isGrounded) {
-      this.position.y = groundHeight;
-      if (this.keys.space && !isDialogueActive) {
-        // Stamina penalty: jump height decreases linearly when fatigued (up to 40% jump force)
-        const staminaFactor = 0.4 + 0.6 * (this.stamina / this.maxStamina);
-        // Adrenaline bonus: jump height increases by up to 20% when pumped
-        const adrenalineFactor = 1.0 + (this.adrenaline / this.maxAdrenaline) * 0.2;
-        
-        this.verticalVelocity = this.jumpForce * staminaFactor * adrenalineFactor;
-        this.isGrounded = false;
-        
-        // Jumping generates a burst of adrenaline!
-        this.adrenaline += 15.0;
-        this.adrenaline = Math.min(this.maxAdrenaline, this.adrenaline);
-      }
-    } else {
+      this.jumpsRemaining = 2; // allow double jump
+    }
+
+    // Detect edge of space press
+    const justPressedSpace = this.keys.space && !this.prevSpace;
+
+    if (justPressedSpace && this.jumpsRemaining > 0) {
+      // Apply jump
+      const staminaFactor = 0.4 + 0.6 * (this.stamina / this.maxStamina);
+      const adrenalineFactor = 1.0 + (this.adrenaline / this.maxAdrenaline) * 0.2;
+      this.verticalVelocity = this.jumpForce * staminaFactor * adrenalineFactor;
+      this.isGrounded = false;
+      this.jumpsRemaining--;
+      // Jumping generates a burst of adrenaline!
+      this.adrenaline += 15.0;
+      this.adrenaline = Math.min(this.maxAdrenaline, this.adrenaline);
+    }
+
+    if (!this.isGrounded) {
       this.verticalVelocity -= this.gravity * deltaTime;
       this.position.y += this.verticalVelocity * deltaTime;
-
       if (this.position.y <= groundHeight) {
         this.position.y = groundHeight;
         this.verticalVelocity = 0;
         this.isGrounded = true;
       }
+    } else {
+      // Ensure we stay on ground when not jumping
+      this.position.y = groundHeight;
     }
+
+    // Update previous space state for edge detection
+    this.prevSpace = this.keys.space;
+
 
     // 9. Update avatar visuals and rotate floating rings
     this.group.position.copy(this.position);

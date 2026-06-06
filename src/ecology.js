@@ -68,7 +68,7 @@ function addTreeToChunk(cData, cultureName, x, y, z, rotY, s) {
 
   if (type === 'glowing') {
     // Elladan tree (glowing canopy & hanging bulbs)
-    pushPartMatrix(cData, 'tree_trunk_glowing', baseMatrix, new THREE.Matrix4().makeTranslation(0, 2.5, 0));
+    pushPartMatrix(cData, 'tree_trunk_glowing', baseMatrix, new THREE.Matrix4().makeTranslation(0, 0.5, 0));
     pushPartMatrix(cData, 'tree_leaves_glowing', baseMatrix, new THREE.Matrix4().makeTranslation(0, 5.0, 0));
     for (let i = 0; i < 4; i++) {
       const angle = (i / 4) * Math.PI * 2;
@@ -80,13 +80,13 @@ function addTreeToChunk(cData, cultureName, x, y, z, rotY, s) {
   } 
   else if (type === 'pine') {
     // Wildlands tree (two cone segments)
-    pushPartMatrix(cData, 'tree_trunk_pine', baseMatrix, new THREE.Matrix4().makeTranslation(0, 2.5, 0));
+    pushPartMatrix(cData, 'tree_trunk_pine', baseMatrix, new THREE.Matrix4().makeTranslation(0, 0.0, 0));
     pushPartMatrix(cData, 'tree_leaves1_pine', baseMatrix, new THREE.Matrix4().makeTranslation(0, 3.5, 0));
     pushPartMatrix(cData, 'tree_leaves2_pine', baseMatrix, new THREE.Matrix4().makeTranslation(0, 5.5, 0));
   } 
   else if (type === 'gear') {
     // Shwazen tree (clockwork gear canopy)
-    pushPartMatrix(cData, 'tree_trunk_gear', baseMatrix, new THREE.Matrix4().makeTranslation(0, 3.5, 0));
+    pushPartMatrix(cData, 'tree_trunk_gear', baseMatrix, new THREE.Matrix4().makeTranslation(0, 1.0, 0));
     pushPartMatrix(cData, 'tree_leaves_gear', baseMatrix, new THREE.Matrix4().makeTranslation(0, 5.5, 0));
     
     const gearMatrix = new THREE.Matrix4().makeRotationX(Math.PI / 2);
@@ -95,12 +95,12 @@ function addTreeToChunk(cData, cultureName, x, y, z, rotY, s) {
   } 
   else if (type === 'crystalline') {
     // Astellian tree (faceted crystals)
-    pushPartMatrix(cData, 'tree_trunk_crystalline', baseMatrix, new THREE.Matrix4().makeTranslation(0, 3.0, 0));
+    pushPartMatrix(cData, 'tree_trunk_crystalline', baseMatrix, new THREE.Matrix4().makeTranslation(0, 0.5, 0));
     pushPartMatrix(cData, 'tree_leaves_crystalline', baseMatrix, new THREE.Matrix4().makeTranslation(0, 5.0, 0));
   } 
   else if (type === 'arcane') {
     // Luari tree (floating satelittes)
-    pushPartMatrix(cData, 'tree_trunk_arcane', baseMatrix, new THREE.Matrix4().makeTranslation(0, 2.5, 0));
+    pushPartMatrix(cData, 'tree_trunk_arcane', baseMatrix, new THREE.Matrix4().makeTranslation(0, 0.0, 0));
     pushPartMatrix(cData, 'tree_leaves_arcane', baseMatrix, new THREE.Matrix4().makeTranslation(0, 4.5, 0));
     for (let i = 0; i < 3; i++) {
       const angle = (i / 3) * Math.PI * 2;
@@ -112,7 +112,7 @@ function addTreeToChunk(cData, cultureName, x, y, z, rotY, s) {
   } 
   else {
     // Standard tree
-    pushPartMatrix(cData, 'tree_trunk_standard', baseMatrix, new THREE.Matrix4().makeTranslation(0, 2.5, 0));
+    pushPartMatrix(cData, 'tree_trunk_standard', baseMatrix, new THREE.Matrix4().makeTranslation(0, 0.0, 0));
     pushPartMatrix(cData, 'tree_leaves_standard', baseMatrix, new THREE.Matrix4().makeTranslation(0, 4.0, 0));
   }
 }
@@ -221,7 +221,7 @@ function getPartDefinition(partKey) {
     // --- Trees ---
     case 'tree_trunk_glowing':
       return {
-        geo: () => new THREE.CylinderGeometry(0.3, 0.6, 6, 6),
+        geo: () => new THREE.CylinderGeometry(0.3, 0.6, 11, 6),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.Elladan.trunkColor, roughness: 0.3, metalness: ACTIVE_THEME === 'cyberpunk' ? 0.9 : 0.5, flatShading: true })
       };
     case 'tree_leaves_glowing':
@@ -243,7 +243,7 @@ function getPartDefinition(partKey) {
 
     case 'tree_trunk_pine':
       return {
-        geo: () => new THREE.CylinderGeometry(0.4, 0.7, 5, 6),
+        geo: () => new THREE.CylinderGeometry(0.4, 0.7, 10, 6),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.Wildlands.trunkColor, roughness: 0.9, flatShading: true })
       };
     case 'tree_leaves1_pine':
@@ -259,7 +259,7 @@ function getPartDefinition(partKey) {
 
     case 'tree_trunk_gear':
       return {
-        geo: () => new THREE.CylinderGeometry(0.5, 0.5, 7, 4),
+        geo: () => new THREE.CylinderGeometry(0.5, 0.5, 12, 4),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.Shwazen.trunkColor, metalness: 0.9, roughness: 0.1, flatShading: true })
       };
     case 'tree_leaves_gear':
@@ -275,7 +275,7 @@ function getPartDefinition(partKey) {
 
     case 'tree_trunk_crystalline':
       return {
-        geo: () => new THREE.CylinderGeometry(0.2, 0.5, 6, 5),
+        geo: () => new THREE.CylinderGeometry(0.2, 0.5, 11, 5),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.Astellian.trunkColor, metalness: 0.6, roughness: 0.2, flatShading: true })
       };
     case 'tree_leaves_crystalline':
@@ -293,7 +293,7 @@ function getPartDefinition(partKey) {
 
     case 'tree_trunk_arcane':
       return {
-        geo: () => new THREE.CylinderGeometry(0.15, 0.5, 5, 8),
+        geo: () => new THREE.CylinderGeometry(0.15, 0.5, 10, 8),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.Luari.trunkColor, metalness: 0.7, roughness: 0.4 })
       };
     case 'tree_leaves_arcane':
@@ -319,7 +319,7 @@ function getPartDefinition(partKey) {
 
     case 'tree_trunk_standard':
       return {
-        geo: () => new THREE.CylinderGeometry(0.4, 0.7, 5, 6),
+        geo: () => new THREE.CylinderGeometry(0.4, 0.7, 10, 6),
         mat: () => new THREE.MeshStandardMaterial({ color: theme.trees.default.trunkColor, roughness: 0.9, flatShading: true })
       };
     case 'tree_leaves_standard':

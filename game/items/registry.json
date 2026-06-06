@@ -1,0 +1,8 @@
+{
+  "items": [
+    { "id": "potion_health", "name": "Health Potion", "color": "#00e5ff", "value": 15 },
+    { "id": "shard_mana", "name": "Mana Shard", "color": "#7c4dff", "value": 25 },
+    { "id": "ore_iron", "name": "Iron Ore", "color": "#ffea00", "value": 5 },
+    { "id": "essence_spirit", "name": "Spirit Essence", "color": "#ff5252", "value": 50 }
+  ]
+}

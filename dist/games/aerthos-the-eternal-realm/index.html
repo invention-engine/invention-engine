@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="An open world adventure in the lands of Aerthos (The Eternal Realm) during the The Age of Empires.">
+  <title>Aerthos (The Eternal Realm) (The Age of Empires Edition)</title>
+  <script type="module" crossorigin src="/assets/index-DfCnL7hq.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-CAoVRusb.css">
+</head>
+<body>
+  <!-- Three.js Canvas Container -->
+  <main id="canvas-container" aria-label="3D World Navigation Canvas"></main>
+
+  <!-- Interactive HUD Overlay -->
+  <div id="hud-overlay">
+  </div>
+
+  <!-- Game Menu Overlay -->
+  <div id="game-menu" class="menu-overlay">
+    <div class="menu-card glass-panel">
+      <h1 class="menu-title">AERTHOS</h1>
+      <p class="menu-subtitle">An Open-World Procedural Adventure</p>
+      <button id="btn-play" class="menu-btn">Play Game</button>
+      <button id="btn-settings" class="menu-btn">Settings</button>
+    </div>
+  </div>
+
+  <!-- Inventory Overlay -->
+  <div id="game-inventory" class="menu-overlay hidden">
+    <div class="menu-card glass-panel">
+      <h1 class="menu-title">INVENTORY</h1>
+      <p class="menu-subtitle">Your Collected Items</p>
+      <div id="inventory-items" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 15px 0;">
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #00e5ff;">Health Potion</div>
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #7c4dff;">Mana Shard</div>
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #ffea00;">Iron Ore</div>
+        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.1); color: #ff5252;">Spirit Essence</div>
+      </div>
+      <button id="btn-close-inventory" class="menu-btn">Back to Game</button>
+    </div>
+  </div>
+
+  <!-- Pause Menu Overlay -->
+  <div id="game-pause" class="menu-overlay hidden">
+    <div class="menu-card glass-panel">
+      <h1 class="menu-title">PAUSED</h1>
+      <p class="menu-subtitle">Game is suspended</p>
+      <button id="btn-resume" class="menu-btn">Resume Game</button>
+      <button id="btn-quit" class="menu-btn">Main Menu</button>
+    </div>
+  </div>
+
+  <!-- Settings Menu Overlay -->
+  <div id="game-settings" class="menu-overlay hidden">
+    <div class="menu-card glass-panel">
+      <h1 class="menu-title">SETTINGS</h1>
+      <p class="menu-subtitle">Game Settings</p>
+      <div style="display: flex; flex-direction: column; gap: 15px; text-align: left; margin: 15px 0;">
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label for="slider-music" style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Music Volume</label>
+          <input type="range" id="slider-music" min="0" max="100" value="80" style="accent-color: var(--accent-color); cursor: pointer; width: 100%;">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label for="slider-sfx" style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Sound Effects</label>
+          <input type="range" id="slider-sfx" min="0" max="100" value="70" style="accent-color: var(--accent-color); cursor: pointer; width: 100%;">
+        </div>
+        <div style="border-top: 1px solid rgba(255, 255, 255, 0.1); margin: 5px 0;"></div>
+        <div style="display: flex; flex-direction: column; gap: 5px;">
+          <label for="slider-sensitivity" style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Camera Sensitivity</label>
+          <input type="range" id="slider-sensitivity" min="10" max="300" value="100" style="accent-color: var(--accent-color); cursor: pointer; width: 100%;">
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 5px;">
+          <label for="checkbox-invert-y" style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; cursor: pointer;">Invert Y-Axis</label>
+          <input type="checkbox" id="checkbox-invert-y" style="width: 18px; height: 18px; accent-color: var(--accent-color); cursor: pointer;">
+        </div>
+      </div>
+      <button id="btn-close-settings" class="menu-btn">Back</button>
+    </div>
+  </div>
+
+  <!-- Bottom Coordinates / Status HUD -->
+  <section id="controls-guide" class="glass-panel" aria-label="Controls Guide">
+    <h3 style="font-size: 0.9rem; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-highlight);">Navigation Controls</h3>
+    <ul class="controls-list">
+      <li><span>Move</span> <span><kbd class="key-cap">W</kbd> <kbd class="key-cap">A</kbd> <kbd class="key-cap">S</kbd> <kbd class="key-cap">D</kbd></span></li>
+      <li><span>Sprint</span> <span>Hold <kbd class="key-cap">Shift</kbd></span></li>
+      <li><span>Rotate View</span> <span>Drag Mouse</span></li>
+      <li><span>Zoom View</span> <span>Scroll Wheel</span></li>
+      <li><span>Jump</span> <span><kbd class="key-cap">Space</kbd></span></li>
+    </ul>
+  </section>
+  <!-- Player Stats HUD -->
+  <section id="status-hud" class="glass-panel" aria-label="Player Stats">
+    <div class="stat-item">
+      <span class="stat-label">Health</span>
+      <div class="stat-bar" style="background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="health-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #ff5252, #ff1744);"></div>
+      </div>
+      <span id="health-percent" class="stat-value">100%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Stamina</span>
+      <div class="stat-bar" style="background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="stamina-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #00e5ff, #7c4dff);"></div>
+      </div>
+      <span id="stamina-percent" class="stat-value">100%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Adrenaline</span>
+      <div class="stat-bar" style="background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="adrenaline-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ffea00, #ffd600);"></div>
+      </div>
+      <span id="adrenaline-percent" class="stat-value">0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Magic</span>
+      <div class="stat-bar" style="background: rgba(255,255,255,0.1); height: 12px; border-radius: 6px; overflow: hidden;">
+        <div id="magic-bar" style="width: 100%; height: 100%; background: linear-gradient(90deg, #7c4dff, #b388ff);"></div>
+      </div>
+      <span id="magic-percent" class="stat-value">100%</span>
+    </div>
+  </section>
+
+  <!-- Interaction Prompt Overlay -->
+  <div id="interaction-prompt" class="glass-panel" style="display: none; position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); padding: 12px 24px; pointer-events: none; z-index: 15; font-size: 1rem; border-color: rgba(0, 229, 255, 0.4); box-shadow: 0 0 15px rgba(0, 229, 255, 0.2); font-weight: 600; letter-spacing: 0.5px;">
+    Press <kbd class="key-cap" style="background: var(--accent-color); border-color: rgba(255,255,255,0.4); box-shadow: none;">E</kbd> to Interact
+  </div>
+
+  <!-- Dialogue Box Overlay -->
+  <div id="dialogue-box" class="glass-panel" style="display: none; position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); width: 620px; max-width: 90%; min-height: 150px; padding: 22px 26px; z-index: 20; flex-direction: column; gap: 12px; pointer-events: auto;">
+    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+      <span id="dialogue-speaker" style="font-family: 'Cinzel', serif; font-weight: bold; color: var(--text-highlight); font-size: 1.15rem; letter-spacing: 0.5px;">Speaker Name</span>
+      <span id="dialogue-context" style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Context</span>
+    </div>
+    <p id="dialogue-text" style="font-size: 0.95rem; line-height: 1.6; color: var(--text-main); min-height: 48px; text-align: left;"></p>
+    <div id="dialogue-options" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
+      <!-- Dynamic option buttons go here -->
+    </div>
+  </div>
+
+  <!-- Fullscreen Loading Overlay -->
+  <div id="loading-overlay" aria-live="polite">
+    <div class="loader-portal" role="presentation"></div>
+    <div class="loading-text">Constructing Aerthos</div>
+    <div class="loading-sub">Compiling heightmap and generating terrain meshes...</div>
+  </div>
+
+  <!-- Minimap Canvas -->
+  <canvas id="minimap" width="240" height="240"></canvas>
+
+  <!-- Vite App Entry Point -->
+</body>
+</html>

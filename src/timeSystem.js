@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 export let timeOfDay = 8.0; // Starts at 8:00 AM
-export const CYCLE_DURATION = 300.0; // 300 seconds (5 minutes) for a full 24-hour loop
+export const CYCLE_DURATION = 1800.0; // 1800 seconds (30 minutes) for a full 24-hour loop
 const HOURS_PER_SECOND = 24.0 / CYCLE_DURATION;
 
 // Keyframes for sky/fog color transitions

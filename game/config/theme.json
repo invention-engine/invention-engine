@@ -1,0 +1,49 @@
+{
+  "activeTheme": "cyberpunk",
+  "themes": {
+    "fantasy": {
+      "name": "High Fantasy",
+      "desc": "A land of ancient magic, stone shrines, and lush forests.",
+      "structures": {
+        "Turchian": { "type": "yurt", "clothColor": 16119260, "woodColor": 6111287, "roofColor": 11591365 },
+        "Ulus": { "type": "yurt", "clothColor": 16119260, "woodColor": 6111287, "roofColor": 11591365 },
+        "Shwazen": { "type": "industrial", "baseColor": 4342338, "pipeColor": 9268835, "lightColor": 16724736 },
+        "Astellian": { "type": "pillar", "baseColor": 16119285, "topColor": 16766287 },
+        "Elladan": { "type": "archway", "stoneColor": 7901340 },
+        "Luari": { "type": "obelisk", "pedColor": 870305, "coreColor": 58879, "lightColor": 58879 },
+        "Slovan": { "type": "shrine", "woodColor": 9268835, "roofColor": 4073251 },
+        "Wildlands": { "type": "campfire", "logColor": 6111287, "fireColor": 16727296, "stoneColor": 7697781, "lightColor": 16739584 }
+      },
+      "trees": {
+        "Elladan": { "type": "glowing", "trunkColor": 2899536, "leavesColor": 5025616, "bulbColor": 11787945 },
+        "Wildlands": { "type": "pine", "trunkColor": 4006676, "leavesColor": 1793568 },
+        "Shwazen": { "type": "gear", "trunkColor": 7697781, "leavesColor": 14334655, "gearColor": 13273604 },
+        "Astellian": { "type": "crystalline", "trunkColor": 13747433, "leavesColor": 16626786 },
+        "Luari": { "type": "arcane", "trunkColor": 3622735, "leavesColor": 58879 },
+        "default": { "type": "standard", "trunkColor": 4006676, "leavesColor": 3046706 }
+      }
+    },
+    "cyberpunk": {
+      "name": "Neo-Cyberpunk",
+      "desc": "A futuristic wasteland of chrome wireframes, neon lights, and concrete bunkers.",
+      "structures": {
+        "Turchian": { "type": "yurt", "clothColor": 2171169, "woodColor": 58879, "roofColor": 16711765 },
+        "Ulus": { "type": "yurt", "clothColor": 2171169, "woodColor": 58879, "roofColor": 16711765 },
+        "Shwazen": { "type": "industrial", "baseColor": 1118481, "pipeColor": 65382, "lightColor": 65382 },
+        "Astellian": { "type": "pillar", "baseColor": 1842204, "topColor": 58879 },
+        "Elladan": { "type": "archway", "stoneColor": 3622735 },
+        "Luari": { "type": "obelisk", "pedColor": 1710618, "coreColor": 16711935, "lightColor": 16711935 },
+        "Slovan": { "type": "shrine", "woodColor": 2171169, "roofColor": 16711765 },
+        "Wildlands": { "type": "campfire", "logColor": 1710618, "fireColor": 65382, "stoneColor": 4342338, "lightColor": 65382 }
+      },
+      "trees": {
+        "Elladan": { "type": "glowing", "trunkColor": 1710618, "leavesColor": 16711935, "bulbColor": 58879 },
+        "Wildlands": { "type": "pine", "trunkColor": 2171169, "leavesColor": 65382 },
+        "Shwazen": { "type": "gear", "trunkColor": 2894892, "leavesColor": 58879, "gearColor": 16711765 },
+        "Astellian": { "type": "crystalline", "trunkColor": 1842204, "leavesColor": 16757504 },
+        "Luari": { "type": "arcane", "trunkColor": 2171169, "leavesColor": 16711935 },
+        "default": { "type": "standard", "trunkColor": 1118481, "leavesColor": 58879 }
+      }
+    }
+  }
+}

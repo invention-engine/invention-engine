@@ -107,10 +107,15 @@ export function getTerrainHeight(x, z) {
   const tx = gridX - x0;
   const tz = gridZ - z0;
   
-  // Bilinear interpolation
-  const h0 = h00 * (1 - tx) + h10 * tx;
-  const h1 = h01 * (1 - tx) + h11 * tx;
-  const h = h0 * (1 - tz) + h1 * tz;
+  // Precise height calculation matching the flat-shaded rendering triangles
+  let h;
+  if (tx + tz <= 1) {
+    // Triangle 1: (p0, p2, p1)
+    h = h00 + tx * (h10 - h00) + tz * (h01 - h00);
+  } else {
+    // Triangle 2: (p1, p2, p3)
+    h = h11 + (1 - tx) * (h01 - h11) + (1 - tz) * (h10 - h11);
+  }
   
   return h * HEIGHT_SCALE;
 }

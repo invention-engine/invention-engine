@@ -1,0 +1,9 @@
+{
+  "musicVolume": 80,
+  "soundVolume": 70,
+  "regions": {
+    "Wildlands": "audio/music/wildlands.mp3",
+    "Slovan": "audio/music/slovan.mp3",
+    "Astellian": "audio/music/astellian.mp3"
+  }
+}
