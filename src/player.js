@@ -5,7 +5,7 @@ import { obstacles } from './ecology.js';
 import { createPlayerMesh } from '../game/characters/player/model.js';
 
 export class Player {
-  constructor(scene, camera, domElement) {
+  constructor(scene, camera, domElement, characterGltf) {
     this.scene = scene;
     this.camera = camera;
     this.domElement = domElement;
@@ -78,18 +78,56 @@ export class Player {
     this.mouseDownTime = 0;
     this.mouseDownPosition = { x: 0, y: 0 };
 
-    this.createAvatar();
+    this.createAvatar(characterGltf);
     this.setupControls();
   }
 
-  createAvatar() {
-    const assets = createPlayerMesh();
-    this.group = assets.group;
-    this.crystal = assets.crystal;
-    this.glow = assets.glow;
-    this.ring1 = assets.ring1;
-    this.ring2 = assets.ring2;
-    this.light = assets.light;
+  createAvatar(characterGltf) {
+    if (characterGltf) {
+      this.group = new THREE.Group();
+      
+      const model = characterGltf.scene;
+      
+      // Auto-scale to human height (around 1.55 meters — shorter than house rooftops)
+      const box = new THREE.Box3().setFromObject(model);
+      const size = box.getSize(new THREE.Vector3());
+      const height = size.y;
+      if (height > 0) {
+        const targetHeight = 1.55;
+        const scale = targetHeight / height;
+        model.scale.setScalar(scale);
+      }
+      
+      // Align bottom of model bounding box with y = 0
+      const box2 = new THREE.Box3().setFromObject(model);
+      model.position.y = -box2.min.y;
+      
+      this.characterModel = model;
+      this.group.add(model);
+      
+      // PointLight source for gameplay illumination and visibility
+      const light = new THREE.PointLight(0x7c4dff, 2.0, 15);
+      light.name = "light";
+      light.position.y = 1.0;
+      light.castShadow = true;
+      light.shadow.bias = -0.001;
+      this.group.add(light);
+      this.light = light;
+      
+      // Empty mock objects to preserve variables accessed by main.js or other code
+      this.crystal = new THREE.Group();
+      this.glow = new THREE.Group();
+      this.ring1 = new THREE.Group();
+      this.ring2 = new THREE.Group();
+    } else {
+      const assets = createPlayerMesh();
+      this.group = assets.group;
+      this.crystal = assets.crystal;
+      this.glow = assets.glow;
+      this.ring1 = assets.ring1;
+      this.ring2 = assets.ring2;
+      this.light = assets.light;
+    }
 
     this.group.position.copy(this.position);
     this.scene.add(this.group);
@@ -98,6 +136,16 @@ export class Player {
   setupControls() {
     // Keyboard keydown / keyup
     window.addEventListener('keydown', (e) => {
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        // Clear active locomotion keys to prevent run-away movement
+        this.keys.w = false;
+        this.keys.s = false;
+        this.keys.a = false;
+        this.keys.d = false;
+        this.keys.space = false;
+        this.keys.shift = false;
+        return;
+      }
       const k = e.key.toLowerCase();
       if (k === 'w' || e.key === 'ArrowUp') this.keys.w = true;
       if (k === 's' || e.key === 'ArrowDown') this.keys.s = true;
@@ -123,6 +171,9 @@ export class Player {
     });
 
     window.addEventListener('keyup', (e) => {
+      if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {
+        return;
+      }
       const k = e.key.toLowerCase();
       if (k === 'w' || e.key === 'ArrowUp') this.keys.w = false;
       if (k === 's' || e.key === 'ArrowDown') this.keys.s = false;
@@ -216,7 +267,7 @@ export class Player {
       if (this.keys.w) moveDirection.add(forward);
       if (this.keys.s) moveDirection.add(forward.clone().negate());
       if (this.keys.a) moveDirection.add(right.clone().negate());
-      if (this.keys.d) moveDirection.add(right.clone().negate());
+      if (this.keys.d) moveDirection.add(right);
     }
 
     const isMoving = moveDirection.lengthSq() > 0;
@@ -365,46 +416,73 @@ export class Player {
     this.prevSpace = this.keys.space;
 
 
-    // 9. Update avatar visuals and rotate floating rings
+    // 9. Update avatar visuals and rotate model to face movement direction
     this.group.position.copy(this.position);
     
-    // Smooth idle bobbing animation for the floating crystal core (scaled down)
     const bobTime = performance.now() * 0.003;
-    let bobHeight = 1.0 + Math.sin(bobTime) * 0.08;
     
-    // Attacking animation: crystal grows and flares
-    let scaleMultiplier = 1.0;
-    if (this.isAttacking) {
-      const attackProgress = this.attackTimer / 0.4;
-      scaleMultiplier = 1.0 + Math.sin(attackProgress * Math.PI) * 0.5; // grows up to 1.5x
+    // Rotate character model to face movement direction
+    if (isMoving && this.characterModel) {
+      const targetAngle = Math.atan2(moveDirection.x, moveDirection.z);
+      let currentAngle = this.characterModel.rotation.y;
+      let diff = targetAngle - currentAngle;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      this.characterModel.rotation.y += diff * 0.15;
     }
     
-    this.crystal.scale.set(scaleMultiplier, scaleMultiplier, scaleMultiplier);
-    this.crystal.position.y = bobHeight;
-    this.glow.position.y = this.crystal.position.y;
-    this.light.position.y = this.crystal.position.y;
+    // Update procedural crystal/rings if they are present
+    if (this.crystal && this.crystal.scale && this.crystal.material) {
+      let bobHeight = 1.0 + Math.sin(bobTime) * 0.08;
+      
+      // Attacking animation: crystal grows and flares
+      let scaleMultiplier = 1.0;
+      if (this.isAttacking) {
+        const attackProgress = this.attackTimer / 0.4;
+        scaleMultiplier = 1.0 + Math.sin(attackProgress * Math.PI) * 0.5; // grows up to 1.5x
+      }
+      
+      this.crystal.scale.set(scaleMultiplier, scaleMultiplier, scaleMultiplier);
+      this.crystal.position.y = bobHeight;
+      this.glow.position.y = this.crystal.position.y;
+      
+      // Spin the core
+      this.crystal.rotation.y += 0.5 * deltaTime;
+      this.crystal.rotation.x += 0.25 * deltaTime;
 
-    // Spin the core
-    this.crystal.rotation.y += 0.5 * deltaTime;
-    this.crystal.rotation.x += 0.25 * deltaTime;
+      // Spin outer rings in opposite directions (expand during attacks)
+      const ringScale = this.isAttacking ? 1.4 : 1.0;
+      if (this.ring1 && this.ring1.scale) {
+        this.ring1.scale.set(ringScale, ringScale, ringScale);
+        this.ring2.scale.set(ringScale, ringScale, ringScale);
+        
+        this.ring1.rotation.x += 0.8 * deltaTime;
+        this.ring1.rotation.y += 0.4 * deltaTime;
+        this.ring2.rotation.y -= 0.6 * deltaTime;
+        this.ring2.rotation.z += 0.3 * deltaTime;
+      }
+      
+      // Synchronize core glow color intensity dynamically
+      let pulseIntensity = 2.0 + Math.sin(bobTime * 2) * 0.8;
+      if (this.isAttacking) {
+        pulseIntensity = 8.0; // Flash brightly during attack
+      }
+      this.crystal.material.emissiveIntensity = pulseIntensity;
+    }
 
-    // Spin outer rings in opposite directions (expand during attacks)
-    const ringScale = this.isAttacking ? 1.4 : 1.0;
-    this.ring1.scale.set(ringScale, ringScale, ringScale);
-    this.ring2.scale.set(ringScale, ringScale, ringScale);
-    
-    this.ring1.rotation.x += 0.8 * deltaTime;
-    this.ring1.rotation.y += 0.4 * deltaTime;
-    this.ring2.rotation.y -= 0.6 * deltaTime;
-    this.ring2.rotation.z += 0.3 * deltaTime;
-
-    // Synchronize core glow color intensity dynamically
+    // Update point light source intensity
     let pulseIntensity = 2.0 + Math.sin(bobTime * 2) * 0.8;
     if (this.isAttacking) {
-      pulseIntensity = 8.0; // Flash brightly during attack
+      pulseIntensity = 8.0;
     }
-    this.crystal.material.emissiveIntensity = pulseIntensity;
-    this.light.intensity = pulseIntensity;
+    if (this.light) {
+      this.light.intensity = pulseIntensity;
+      if (this.characterModel) {
+        this.light.position.y = 1.2;
+      } else if (this.crystal && this.crystal.position) {
+        this.light.position.y = this.crystal.position.y;
+      }
+    }
 
     // 10. Update Camera Rig with Smooth Damping (scaled camera follow distance)
     this.cameraDistance += (this.targetCameraDistance - this.cameraDistance) * 0.1;

@@ -9,6 +9,8 @@ export let obstacles = [];
 const geometriesCache = {};
 const materialsCache = {};
 
+let treePrototypes = [];
+
 function getGeometry(key, creatorFunc) {
   if (!geometriesCache[key]) {
     geometriesCache[key] = creatorFunc();
@@ -65,6 +67,26 @@ function addTreeToChunk(cData, cultureName, x, y, z, rotY, s) {
   const theme = themeConfig[ACTIVE_THEME];
   const treeConfig = theme.trees[cultureName] || theme.trees['default'];
   const type = treeConfig.type;
+
+  if (treePrototypes.length > 0) {
+    const treeTypeMap = {
+      'glowing': 0,
+      'pine': 1,
+      'gear': 2,
+      'crystalline': 3,
+      'arcane': 4,
+      'standard': 5
+    };
+    const typeIndex = treeTypeMap[type] !== undefined ? treeTypeMap[type] : 5;
+    const protoIndex = typeIndex % treePrototypes.length;
+    const partKey = `gltf_tree_${protoIndex}`;
+    
+    const proto = treePrototypes[protoIndex];
+    const localMatrix = proto ? proto.matrixWorld : new THREE.Matrix4();
+    
+    pushPartMatrix(cData, partKey, baseMatrix, localMatrix);
+    return;
+  }
 
   if (type === 'glowing') {
     // Elladan tree (glowing canopy & hanging bulbs)
@@ -215,6 +237,17 @@ function addStructureToChunk(cData, cultureName, x, y, z, rotY, s) {
 
 // Return geometry and material factory configurations based on the active theme
 function getPartDefinition(partKey) {
+  if (partKey.startsWith('gltf_tree_')) {
+    const idx = parseInt(partKey.split('_')[2]);
+    const proto = treePrototypes[idx % treePrototypes.length];
+    if (proto) {
+      return {
+        geo: () => proto.geometry,
+        mat: () => proto.material
+      };
+    }
+  }
+
   const theme = themeConfig[ACTIVE_THEME];
   
   switch (partKey) {
@@ -444,13 +477,71 @@ function getPartDefinition(partKey) {
  * Using 4x4 spatial chunks and THREE.InstancedMesh rendering for high-performance culling.
  * @param {THREE.Scene} scene 
  * @param {string} seed 
+ * @param {Object} [treesGltf] - The loaded tree GLTF assets
  * @returns {THREE.Group} The container group of all scattered ecology
  */
-export function spawnEcology(scene, seed) {
+export function spawnEcology(scene, seed, treesGltf) {
   const ecologyGroup = new THREE.Group();
   ecologyGroup.name = "ecology_assets";
   
   obstacles.length = 0; // Reset collision obstacles
+
+  // Extract tree prototypes from GLTF if provided
+  treePrototypes = [];
+  if (treesGltf) {
+    treesGltf.scene.updateWorldMatrix(true, true);
+    
+    // First try collecting Background_Tree_Atlas meshes
+    treesGltf.scene.traverse((child) => {
+      if (child.isMesh && child.name.includes('Background_Tree_Atlas')) {
+        treePrototypes.push({
+          geometry: child.geometry,
+          material: child.material,
+          matrixWorld: child.matrixWorld.clone()
+        });
+      }
+    });
+
+    // Fallback if none found
+    if (treePrototypes.length === 0) {
+      treesGltf.scene.traverse((child) => {
+        if (child.isMesh) {
+          treePrototypes.push({
+            geometry: child.geometry,
+            material: child.material,
+            matrixWorld: child.matrixWorld.clone()
+          });
+        }
+      });
+    }
+
+    // Scale each prototype to ~8 units tall, then ground-align by computing the
+    // ACTUAL min-Y of the geometry after the full matrixWorld transform.
+    // Each mesh in the GLB may have a different pivot (base, center, top), so we
+    // must use the transformed bbox rather than raw geometry bounds.
+    const localBox = new THREE.Box3();
+    treePrototypes.forEach(proto => {
+      // Step 1: measure raw geometry height (local space)
+      localBox.setFromBufferAttribute(proto.geometry.attributes.position);
+      const localHeight = localBox.getSize(new THREE.Vector3()).y;
+
+      // Step 2: post-multiply scale so the geometry is ~8 units tall
+      if (localHeight > 0) {
+        const scaleFactor = 8.0 / localHeight;
+        proto.matrixWorld.multiply(new THREE.Matrix4().makeScale(scaleFactor, scaleFactor, scaleFactor));
+      }
+
+      // Step 3: transform the local bbox through the now-scaled matrixWorld to get
+      // the actual minimum Y in "placement/template" space (the space that baseMatrix maps to world)
+      const worldBox = localBox.clone().applyMatrix4(proto.matrixWorld);
+      const minY = worldBox.min.y;
+
+      // Step 4: pre-multiply a Y translation so the tree base sits exactly at Y = 0
+      if (Math.abs(minY) > 0.001) {
+        proto.matrixWorld.premultiply(new THREE.Matrix4().makeTranslation(0, -minY, 0));
+      }
+    });
+  }
 
   // 1. Create a 4x4 grid of spatial chunks
   const CHUNKS_X = 4;

@@ -15,11 +15,37 @@ export let culturesList = [];
  * @param {Object} worldData 
  */
 export function initTerrainData(worldData) {
-  gridHeights = worldData.grid.cells.h;
+  // Smooth the terrain heightmap (100x100 grid) using a 2-pass neighbor-averaging filter to round off triangular peaks
+  const w = 100;
+  const h = 100;
+  let tempHeights = [...worldData.grid.cells.h];
+  
+  for (let pass = 0; pass < 2; pass++) {
+    const smoothed = new Array(w * h);
+    for (let z = 0; z < h; z++) {
+      for (let x = 0; x < w; x++) {
+        let sum = 0;
+        let count = 0;
+        for (let dz = -1; dz <= 1; dz++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            const nz = z + dz;
+            if (nx >= 0 && nx < w && nz >= 0 && nz < h) {
+              sum += tempHeights[nz * w + nx];
+              count++;
+            }
+          }
+        }
+        smoothed[z * w + x] = sum / count;
+      }
+    }
+    tempHeights = smoothed;
+  }
+  gridHeights = tempHeights;
   
   // Extract culture list
-  culturesList = worldData.pack.cultures || [];
-  const loreCultures = worldData.lore.cultures || [];
+  culturesList = (worldData.pack && worldData.pack.cultures) || [];
+  const loreCultures = (worldData.lore && worldData.lore.cultures) || [];
   
   // Clean up cultures and merge lore details (values, traditions, description)
   culturesList.forEach((culture, index) => {
@@ -57,7 +83,7 @@ export function initTerrainData(worldData) {
     culturesList.forEach((culture) => {
       if (culture.center === null || culture.center === undefined) return;
       const cx = culture.center % GRID_WIDTH;
-      const cz = Math.floor(culture.center / GRID_WIDTH);
+      const cz = Math.floor(culture.center / GRID_WIDTH) % GRID_HEIGHT;
       
       const dx = px - cx;
       const dz = pz - cz;

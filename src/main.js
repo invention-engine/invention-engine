@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { initTerrainData, buildTerrainMesh, SPACING, getTerrainHeight } from './terrain.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { initTerrainData, buildTerrainMesh, SPACING, getTerrainHeight, getCultureAt } from './terrain.js';
 import { Player } from './player.js';
-import { initUI, updateHUD, updateMinimap, hideLoadingScreen } from './ui.js';
+import { initUI, updateHUD, updateMinimap, hideLoadingScreen, showDiscoveryBanner } from './ui.js';
 import { updateAtmosphere } from './atmosphere.js';
 import { spawnEcology } from './ecology.js';
 import { loadThemeConfig } from './themeConfig.js';
@@ -26,6 +27,15 @@ import {
   saveGame, 
   loadGame 
 } from './questSystem.js';
+import {
+  showAuthModal,
+  connectSocket,
+  savePlayerState,
+  loadPlayerState,
+  isAuthenticated,
+  emitPlayerMove,
+  emitChatMessage
+} from './network.js';
 
 let scene, camera, renderer, lastTime = 0;
 let player, terrainMesh, ecologyGroup;
@@ -33,6 +43,9 @@ let ambientLight, dirLight;
 let isLoaded = false;
 let interactables = [];
 let worldData = null;
+let worldBurgs = [];
+let lastPlayerCulture = null;
+let lastPlayerBurg = null;
 
 // Initialize the 3D and Engine environment
 function init() {
@@ -53,7 +66,8 @@ function init() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 0.5;   // Lower exposure so sky isn't blown out
+  renderer.outputColorSpace = THREE.SRGBColorSpace; // Required by Sky shader
   container.appendChild(renderer.domElement);
 
   // 4. Setup Ambient and Celestial Directional Lights
@@ -112,6 +126,27 @@ function init() {
       }
     }
   });
+
+  // Enter to Chat listener
+  const chatInput = document.getElementById('chat-input');
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      if (document.activeElement === chatInput) {
+        const text = chatInput.value.trim();
+        if (text) {
+          emitChatMessage(text);
+        }
+        chatInput.value = '';
+        chatInput.blur();
+      } else {
+        // Only focus chat input if not in a dialogue
+        if (!isDialogueActive) {
+          chatInput.focus();
+          e.preventDefault();
+        }
+      }
+    }
+  });
 }
 
 // Branching dialogue tree handler for culture centers
@@ -128,7 +163,7 @@ function talkToCultureCenter(culture) {
       openDialogue(
         `${name} Elder`,
         `${name} Lore`,
-        worldData.lore.creationMyth,
+        (worldData.lore && worldData.lore.creationMyth) || "No creation myth exists for this world.",
         [{ text: "Go Back", action: () => talkToCultureCenter(culture) }]
       );
     }
@@ -159,10 +194,20 @@ function talkToCultureCenter(culture) {
       text: "Request Hearthstone Blessing (Save Game)",
       action: () => {
         saveGame(player.position);
+        
+        let desc = "The Hearthstone glows with a warm, comforting light. Your spirit is bound to this sanctuary. (Your position and quest progress have been saved to local storage!)";
+        
+        if (isAuthenticated()) {
+          savePlayerState(player.position, 'Slovan', activeQuests, [])
+            .then(() => console.log('[network] Cloud save synchronized.'))
+            .catch(err => console.error('[network] Cloud save failed:', err));
+          desc = "The Hearthstone glows with a warm, comforting light. Your spirit is bound to this sanctuary. (Your position and quest progress have been saved to local storage & cloud database!)";
+        }
+        
         openDialogue(
           "Slovan Shrine",
           "Hearthstone Blessing",
-          "The Hearthstone glows with a warm, comforting light. Your spirit is bound to this sanctuary. (Your position and quest progress have been saved to local storage!)",
+          desc,
           [{ text: "Go Back", action: () => talkToCultureCenter(culture) }]
         );
       }
@@ -242,6 +287,14 @@ function talkToCultureCenter(culture) {
   );
 }
 
+const gltfLoader = new GLTFLoader();
+
+function loadGLB(url) {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(url, resolve, undefined, reject);
+  });
+}
+
 // Asynchronously load the world generator data
 async function loadWorldData() {
   try {
@@ -261,21 +314,35 @@ async function loadWorldData() {
     terrainMesh = buildTerrainMesh();
     scene.add(terrainMesh);
     
-    // Spawn procedural vegetation and ruins
-    ecologyGroup = spawnEcology(scene, worldData.seed);
+    const loadingSub = document.querySelector('.loading-sub');
+    if (loadingSub) loadingSub.textContent = "Loading 3D assets (character & tree pack)...";
+    
+    // Load GLTF assets
+    const [characterGltf, treesGltf] = await Promise.all([
+      loadGLB('./game/characters/player/lyfe_bestla_snowbreak.glb'),
+      loadGLB('./game/low_poly_forest_tree_pack.glb')
+    ]).catch(err => {
+      console.warn("Could not load 3D GLTF assets, falling back to procedural meshes", err);
+      return [null, null];
+    });
+
+    if (loadingSub) loadingSub.textContent = "Generating forest and scatter elements...";
+    
+    // Spawn procedural vegetation and ruins using the tree pack
+    ecologyGroup = spawnEcology(scene, worldData.seed, treesGltf);
     
     await initUI(worldData);
     
-    // Instantiate Player with custom controls & camera follow rig
-    player = new Player(scene, camera, renderer.domElement);
+    // Instantiate Player with custom controls, camera follow rig & character GLB
+    player = new Player(scene, camera, renderer.domElement, characterGltf);
     
     // Populate interactables list from cultural center coordinates
     interactables = [];
-    const culturesList = worldData.pack.cultures || [];
+    const culturesList = (worldData.pack && worldData.pack.cultures) || [];
     culturesList.forEach((culture) => {
       if (culture.center === null || culture.center === undefined) return;
       const cx = culture.center % 32;
-      const cz = Math.floor(culture.center / 32);
+      const cz = Math.floor(culture.center / 32) % 32;
       const wx = cx * SPACING;
       const wz = cz * SPACING;
       const wy = getTerrainHeight(wx, wz);
@@ -288,6 +355,26 @@ async function loadWorldData() {
       });
     });
 
+    // Populate world burgs (cities/towns) inside the 32x32 area
+    worldBurgs = [];
+    if (worldData.pack && worldData.pack.burgs) {
+      worldData.pack.burgs.forEach(burg => {
+        const gx = burg.cell % 100;
+        const gz = Math.floor(burg.cell / 100);
+        if (gx < 32 && gz < 32) {
+          const wx = gx * SPACING;
+          const wz = gz * SPACING;
+          const wy = getTerrainHeight(wx, wz);
+          worldBurgs.push({
+            name: burg.name,
+            position: new THREE.Vector3(wx, wy, wz),
+            population: burg.population,
+            capital: burg.capital
+          });
+        }
+      });
+    }
+
     isLoaded = true;
     
     // Expose variables on window for testing/debugging
@@ -298,56 +385,106 @@ async function loadWorldData() {
     // Fade loading screen out smoothly
     hideLoadingScreen();
     
-    // Query if a save game exists at start to offer player location recovery
-    const saveData = loadGame();
-    if (saveData) {
-      restoreQuests(saveData);
-      
-      // Delay slightly to allow loading screen fade to begin
-      setTimeout(() => {
-        openDialogue(
-          "Sanctuary Recall",
-          "Hearthstone network",
-          "An echo of your past self has been detected at a Slovan Hearthstone. Would you like to restore your location and active quests, or begin a new journey?",
-          [
-            {
-              text: "Recall Location",
-              action: () => {
-                player.position.set(saveData.position.x, saveData.position.y, saveData.position.z);
-                player.group.position.copy(player.position);
-                
-                if (activeQuests.spiritHunt === 'active') {
-                  startSpiritHunt(scene, player.position);
-                }
-                
-                openDialogue(
-                  "Sanctuary Recall",
-                  "Recall successful",
-                  "Recall coordinates stabilized. The spirits watch over you.",
-                  [{ text: "Begin", action: () => {} }]
-                );
-              }
-            },
-            {
-              text: "Start Fresh",
-              action: () => {
-                activeQuests.spiritHunt = 'inactive';
-                openDialogue(
-                  "Sanctuary Recall",
-                  "Recall bypassed",
-                  "Your journey starts anew from the coordinates of the Wildlands.",
-                  [{ text: "Begin", action: () => {} }]
-                );
-              }
+    // Show Auth Modal before launching the game loop
+    showAuthModal(async (authData) => {
+      let stateLoadedFromCloud = false;
+
+      if (authData) {
+        // Authenticated! Connect sockets
+        connectSocket(scene);
+
+        // Try to load player state from server database
+        try {
+          const cloudState = await loadPlayerState();
+          if (cloudState && typeof cloudState.x === 'number') {
+            player.position.set(cloudState.x, cloudState.y, cloudState.z);
+            player.group.position.copy(player.position);
+            
+            if (cloudState.quests) {
+              restoreQuests({ quests: cloudState.quests });
             }
-          ]
-        );
-      }, 500);
-    }
-    
-    // Initialize timing and start loop
-    lastTime = performance.now();
-    animate();
+            stateLoadedFromCloud = true;
+
+            setTimeout(() => {
+              openDialogue(
+                "Cloud Sync",
+                "State Restored",
+                `Welcome back, ${authData.username}! Your location and state have been synchronized from the cloud database.`,
+                [{ text: "Begin Adventure", action: () => {} }]
+              );
+            }, 600);
+          }
+        } catch (err) {
+          console.warn('[network] Could not load cloud state:', err);
+        }
+      }
+
+      // If cloud load did not run/succeed, fall back to local save
+      if (!stateLoadedFromCloud) {
+        const saveData = loadGame();
+        if (saveData) {
+          restoreQuests(saveData);
+          
+          // Delay slightly to allow loading screen fade to begin
+          setTimeout(() => {
+            openDialogue(
+              "Sanctuary Recall",
+              "Hearthstone network",
+              "An echo of your past self has been detected at a Slovan Hearthstone. Would you like to restore your location and active quests, or begin a new journey?",
+              [
+                {
+                  text: "Recall Location",
+                  action: () => {
+                    player.position.set(saveData.position.x, saveData.position.y, saveData.position.z);
+                    player.group.position.copy(player.position);
+                    
+                    if (activeQuests.spiritHunt === 'active') {
+                      startSpiritHunt(scene, player.position);
+                    }
+                    
+                    openDialogue(
+                      "Sanctuary Recall",
+                      "Recall successful",
+                      "Recall coordinates stabilized. The spirits watch over you.",
+                      [{ text: "Begin", action: () => {} }]
+                    );
+                  }
+                },
+                {
+                  text: "Start Fresh",
+                  action: () => {
+                    activeQuests.spiritHunt = 'inactive';
+                    openDialogue(
+                      "Sanctuary Recall",
+                      "Recall bypassed",
+                      "Your journey starts anew from the coordinates of the Wildlands.",
+                      [{ text: "Begin", action: () => {} }]
+                    );
+                  }
+                }
+              ]
+            );
+          }, 500);
+        }
+      }
+
+      // Setup periodic cloud save (every 30 seconds)
+      setInterval(() => {
+        if (isAuthenticated() && player) {
+          const currentCulture = getCultureAt(player.position.x, player.position.z);
+          savePlayerState(
+            player.position,
+            currentCulture ? currentCulture.name : 'Wildlands',
+            activeQuests,
+            []
+          ).catch(err => console.warn('[network] Periodic auto-save failed:', err));
+        }
+      }, 30000);
+
+      // Initialize timing and start loop
+      lastTime = performance.now();
+      animate();
+    });
     
   } catch (error) {
     console.error("Critical error loading the world configuration:", error);
@@ -437,12 +574,62 @@ function animate() {
 
   // Update locomotion, camera, physics, and animations
   player.update(dt, isDialogueActive);
+
+  // Emit coordinate updates to multiplayer server
+  if (isAuthenticated()) {
+    const currentCulture = getCultureAt(player.position.x, player.position.z);
+    emitPlayerMove(
+      player.position,
+      currentCulture ? currentCulture.name : 'Wildlands',
+      player.theta
+    );
+  }
   
   // Update environment fog and lights per culture region
-  updateAtmosphere(scene, ambientLight, dirLight, player.position, dt);
+  updateAtmosphere(scene, ambientLight, dirLight, player.position, dt, camera);
 
   // Tick active quest waypoints
   updateQuests(scene, player, dt);
+
+  // Faction territory/kingdom border crossing check
+  const currentCulture = getCultureAt(player.position.x, player.position.z);
+  if (currentCulture) {
+    if (lastPlayerCulture === null) {
+      lastPlayerCulture = currentCulture;
+      // Brief delay after initial load to welcome the player
+      setTimeout(() => {
+        showDiscoveryBanner(`Territory of ${currentCulture.name}`, "TERRITORY DISCOVERED");
+      }, 2000);
+    } else if (currentCulture.name !== lastPlayerCulture.name) {
+      showDiscoveryBanner(`Territory of ${currentCulture.name}`, "TERRITORY DISCOVERED");
+      lastPlayerCulture = currentCulture;
+    }
+  }
+
+  // City/burg proximity check
+  let currentBurg = null;
+  let minBurgDist = Infinity;
+  worldBurgs.forEach(burg => {
+    const dist = player.position.distanceTo(burg.position);
+    if (dist < 40.0 && dist < minBurgDist) {
+      minBurgDist = dist;
+      currentBurg = burg;
+    }
+  });
+
+  if (currentBurg) {
+    if (lastPlayerBurg !== currentBurg.name) {
+      const typeDescriptor = currentBurg.capital ? "CAPITAL CITY ENTERED" : "SETTLEMENT ENTERED";
+      showDiscoveryBanner(currentBurg.name, typeDescriptor);
+      lastPlayerBurg = currentBurg.name;
+    }
+  } else if (lastPlayerBurg) {
+    // Check if player has walked far enough away to trigger exit (hysteresis to prevent spamming)
+    const prevBurg = worldBurgs.find(b => b.name === lastPlayerBurg);
+    if (!prevBurg || player.position.distanceTo(prevBurg.position) > 48.0) {
+      lastPlayerBurg = null;
+    }
+  }
   
   // Refresh HUD readings & minimap
   updateHUD(
@@ -458,7 +645,7 @@ function animate() {
     getTimeString(),
     isNight()
   );
-  updateMinimap(player.position, SPACING);
+  updateMinimap(player.position, SPACING, player.theta);
 
   // Render the frame
   renderer.render(scene, camera);

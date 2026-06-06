@@ -103,7 +103,7 @@ export async function initUI(worldData) {
   elClockDot = document.getElementById('clock-sun-moon-dot');
 
   // Populate static lore info
-  const lore = worldData.lore;
+  const lore = worldData.lore || {};
   if (elTitle) elTitle.textContent = lore.worldName || 'Aerthos';
   if (elSeed) elSeed.textContent = `Seed: ${worldData.seed}`;
   if (elLoreName) elLoreName.textContent = lore.worldName || '-';
@@ -192,9 +192,20 @@ export async function initUI(worldData) {
     });
   }
 
+  let previousSettingsState = UIState.MENU;
+
   const btnSettings = document.getElementById('btn-settings');
   if (btnSettings) {
     btnSettings.addEventListener('click', () => {
+      previousSettingsState = UIState.MENU;
+      setState(UIState.SETTINGS);
+    });
+  }
+
+  const btnPauseSettings = document.getElementById('btn-pause-settings');
+  if (btnPauseSettings) {
+    btnPauseSettings.addEventListener('click', () => {
+      previousSettingsState = UIState.PAUSE;
       setState(UIState.SETTINGS);
     });
   }
@@ -204,12 +215,14 @@ export async function initUI(worldData) {
   const sliderSfx = document.getElementById('slider-sfx');
   const sliderSensitivity = document.getElementById('slider-sensitivity');
   const checkboxInvertY = document.getElementById('checkbox-invert-y');
+  const selectMinimapMode = document.getElementById('select-minimap-mode');
 
   window.gameSettings = {
     musicVolume: parseInt(localStorage.getItem('game_music_volume') ?? '80'),
     sfxVolume: parseInt(localStorage.getItem('game_sfx_volume') ?? '70'),
     sensitivity: parseInt(localStorage.getItem('game_camera_sensitivity') ?? '100'),
-    invertY: localStorage.getItem('game_invert_y') === 'true'
+    invertY: localStorage.getItem('game_invert_y') === 'true',
+    minimapMode: localStorage.getItem('game_minimap_mode') ?? 'rotating'
   };
 
   if (sliderMusic) {
@@ -240,11 +253,18 @@ export async function initUI(worldData) {
       localStorage.setItem('game_invert_y', window.gameSettings.invertY);
     });
   }
+  if (selectMinimapMode) {
+    selectMinimapMode.value = window.gameSettings.minimapMode;
+    selectMinimapMode.addEventListener('change', (e) => {
+      window.gameSettings.minimapMode = e.target.value;
+      localStorage.setItem('game_minimap_mode', window.gameSettings.minimapMode);
+    });
+  }
 
   const btnCloseSettings = document.getElementById('btn-close-settings');
   if (btnCloseSettings) {
     btnCloseSettings.addEventListener('click', () => {
-      setState(UIState.MENU);
+      setState(previousSettingsState);
     });
   }
 }
@@ -343,40 +363,92 @@ export function updateHUD(playerPosition, health, maxHealth, stamina, maxStamina
 }
 
 /**
- * Redraws the 2D pixel cultural minimap overlay with player indicator
+ * Redraws the 2D pixel cultural minimap overlay with player indicator, compass, and grid
  * @param {THREE.Vector3} playerPosition 
  * @param {number} spacing 
+ * @param {number} theta - Camera horizontal orbit angle
  */
-export function updateMinimap(playerPosition, spacing) {
+export function updateMinimap(playerPosition, spacing, theta = 0) {
   if (!ctxMinimap || !elMinimap) return;
   
   const w = elMinimap.width;
   const h = elMinimap.height;
+  const cx = w / 2;
+  const cy = h / 2;
   const cellSizeX = w / GRID_WIDTH;
   const cellSizeZ = h / GRID_HEIGHT;
   
+  // Calculate player position in grid pixels
+  const px_pixels = (playerPosition.x / spacing) * cellSizeX;
+  const pz_pixels = (playerPosition.z / spacing) * cellSizeZ;
+  
+  ctxMinimap.clearRect(0, 0, w, h);
+
+  // Save context for map rotation/translation
+  ctxMinimap.save();
+
+  // Clip to circular border
+  ctxMinimap.beginPath();
+  ctxMinimap.arc(cx, cy, cx - 2, 0, Math.PI * 2);
+  ctxMinimap.clip();
+
+  const lookAngle = -theta - Math.PI;
+  const rotationMode = window.gameSettings?.minimapMode === 'rotating';
+  
+  // forward = (-sinθ, -cosθ) in canvas space, angle = atan2(-cosθ,-sinθ) = lookAngle - π/2.
+  // Fixed: arrow rotates by (lookAngle - π/2) to align tip with actual forward direction.
+  // Rotating: rotate map so forward = canvas UP (-π/2). mapRotation = -π/2 - (lookAngle-π/2) = -lookAngle.
+  // But forward canvas angle = lookAngle-π/2, want it at -π/2: mapRotation = -π/2-(lookAngle-π/2) = -lookAngle.
+  const mapRotation = rotationMode ? -(lookAngle + Math.PI) : 0;
+  const screenNorthAngle = rotationMode ? (lookAngle + Math.PI / 2) : -Math.PI / 2;
+
+  // Translate origin to minimap center and apply rotation
+  ctxMinimap.translate(cx, cy);
+  ctxMinimap.rotate(mapRotation);
+
   // 1. Draw cultural cell grid
   for (let cz = 0; cz < GRID_HEIGHT; cz++) {
     for (let cx = 0; cx < GRID_WIDTH; cx++) {
       const idx = cz * GRID_WIDTH + cx;
       const culture = cellCultures[idx];
       ctxMinimap.fillStyle = culture ? culture.color : '#000000';
-      ctxMinimap.fillRect(cx * cellSizeX, cz * cellSizeZ, cellSizeX, cellSizeZ);
+      
+      const cellLeft = cx * cellSizeX - px_pixels;
+      const cellTop  = cz * cellSizeZ - pz_pixels;
+      ctxMinimap.fillRect(cellLeft, cellTop, cellSizeX, cellSizeZ);
     }
   }
 
-  // 2. Draw culture origin centers
+  // 2. Draw Grid Lines (thin, semi-transparent for easy distance calculation)
+  ctxMinimap.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+  ctxMinimap.lineWidth = 1;
+  // Vertical lines
+  for (let c = 0; c <= GRID_WIDTH; c++) {
+    const lx = c * cellSizeX - px_pixels;
+    ctxMinimap.beginPath();
+    ctxMinimap.moveTo(lx, -cy * 2);
+    ctxMinimap.lineTo(lx, cy * 2);
+    ctxMinimap.stroke();
+  }
+  // Horizontal lines
+  for (let r = 0; r <= GRID_HEIGHT; r++) {
+    const lz = r * cellSizeZ - pz_pixels;
+    ctxMinimap.beginPath();
+    ctxMinimap.moveTo(-cx * 2, lz);
+    ctxMinimap.lineTo(cx * 2, lz);
+    ctxMinimap.stroke();
+  }
+
+  // 3. Draw culture origin centers
   culturesList.forEach((culture) => {
     if (culture.center === null || culture.center === undefined) return;
-    const cx = culture.center % GRID_WIDTH;
-    const cz = Math.floor(culture.center / GRID_WIDTH);
+    const mx = culture.center % GRID_WIDTH;
+    const mz = Math.floor(culture.center / GRID_WIDTH) % GRID_HEIGHT;
+    const wx = mx * cellSizeX - px_pixels + cellSizeX / 2;
+    const wz = mz * cellSizeZ - pz_pixels + cellSizeZ / 2;
     
     ctxMinimap.beginPath();
-    ctxMinimap.arc(
-      cx * cellSizeX + cellSizeX / 2, 
-      cz * cellSizeZ + cellSizeZ / 2, 
-      4, 0, Math.PI * 2
-    );
+    ctxMinimap.arc(wx, wz, 4, 0, Math.PI * 2);
     ctxMinimap.fillStyle = '#ffffff';
     ctxMinimap.fill();
     ctxMinimap.lineWidth = 1.5;
@@ -384,27 +456,106 @@ export function updateMinimap(playerPosition, spacing) {
     ctxMinimap.stroke();
   });
 
-  // 3. Draw player position dot (pulsing animation)
-  const gridPX = playerPosition.x / spacing;
-  const gridPZ = playerPosition.z / spacing;
-  
-  const px = gridPX * cellSizeX;
-  const pz = gridPZ * cellSizeZ;
-  
-  const pulseFactor = 1.0 + Math.sin(performance.now() * 0.01) * 0.25;
-  
+  // Restore rotated context so we can draw fixed UI overlays (player arrow, scale bar, compass border)
+  ctxMinimap.restore();
+
+  // 4. Draw Player Indicator in center of the minimap
+  ctxMinimap.save();
+  ctxMinimap.translate(cx, cy);
+  if (rotationMode) {
+    // Rotating: map already orients forward=up. Arrow just needs to point straight up.
+    ctxMinimap.rotate(0);
+  } else {
+    ctxMinimap.rotate(lookAngle + Math.PI / 2);
+  }
+
+  // Draw FOV cone — always opens toward canvas -Y (forward)
+  const fov = 45 * Math.PI / 180;
+  ctxMinimap.fillStyle = 'rgba(0, 229, 255, 0.15)';
   ctxMinimap.beginPath();
-  ctxMinimap.arc(px, pz, 6 * pulseFactor, 0, Math.PI * 2);
-  ctxMinimap.fillStyle = 'rgba(0, 229, 255, 0.4)';
+  ctxMinimap.moveTo(0, 0);
+  ctxMinimap.arc(0, 0, 30, -Math.PI / 2 - fov / 2, -Math.PI / 2 + fov / 2);
+  ctxMinimap.closePath();
   ctxMinimap.fill();
 
-  ctxMinimap.beginPath();
-  ctxMinimap.arc(px, pz, 3.5, 0, Math.PI * 2);
+  // Draw player arrow — tip points along canvas -Y (up = forward)
   ctxMinimap.fillStyle = '#00e5ff';
-  ctxMinimap.fill();
-  ctxMinimap.lineWidth = 1;
   ctxMinimap.strokeStyle = '#ffffff';
+  ctxMinimap.lineWidth = 1.5;
+  ctxMinimap.beginPath();
+  ctxMinimap.moveTo(0, -8);       // Tip pointing up (forward)
+  ctxMinimap.lineTo(-5, 6);       // Back left
+  ctxMinimap.lineTo(0, 3);        // Indent
+  ctxMinimap.lineTo(5, 6);        // Back right
+  ctxMinimap.closePath();
+  ctxMinimap.fill();
   ctxMinimap.stroke();
+  ctxMinimap.restore();
+
+  // 5. Draw Distance Scale Bar (bottom-left)
+  const scaleMeters = 100;
+  const scalePixels = (scaleMeters / spacing) * cellSizeX;
+  const bx = 16;
+  const by = h - 20;
+  ctxMinimap.strokeStyle = '#ffffff';
+  ctxMinimap.lineWidth = 2;
+  ctxMinimap.beginPath();
+  ctxMinimap.moveTo(bx, by);
+  ctxMinimap.lineTo(bx + scalePixels, by);
+  ctxMinimap.moveTo(bx, by - 4);
+  ctxMinimap.lineTo(bx, by + 4);
+  ctxMinimap.moveTo(bx + scalePixels, by - 4);
+  ctxMinimap.lineTo(bx + scalePixels, by + 4);
+  ctxMinimap.stroke();
+
+  ctxMinimap.fillStyle = '#ffffff';
+  ctxMinimap.font = 'bold 9px sans-serif';
+  ctxMinimap.textAlign = 'left';
+  ctxMinimap.textBaseline = 'middle';
+  ctxMinimap.fillText(`${scaleMeters}m`, bx + 4, by - 8);
+
+  // 6. Draw Compass Indicators on the border
+  const borderR = cx - 12;
+
+  const directions = [
+    { label: 'N', angle: screenNorthAngle, color: '#ff3b30', isNorth: true },
+    { label: 'E', angle: screenNorthAngle + Math.PI / 2, color: '#ffffff' },
+    { label: 'S', angle: screenNorthAngle + Math.PI, color: '#ffffff' },
+    { label: 'W', angle: screenNorthAngle - Math.PI / 2, color: '#ffffff' }
+  ];
+
+  directions.forEach(dir => {
+    const dx = cx + Math.cos(dir.angle) * borderR;
+    const dy = cy + Math.sin(dir.angle) * borderR;
+
+    // Draw small background dark circle for legibility
+    ctxMinimap.fillStyle = 'rgba(10, 10, 15, 0.85)';
+    ctxMinimap.beginPath();
+    ctxMinimap.arc(dx, dy, 7, 0, Math.PI * 2);
+    ctxMinimap.fill();
+
+    // Draw letter
+    ctxMinimap.fillStyle = dir.color;
+    ctxMinimap.font = 'bold 9px sans-serif';
+    ctxMinimap.textAlign = 'center';
+    ctxMinimap.textBaseline = 'middle';
+    ctxMinimap.fillText(dir.label, dx, dy);
+
+    // Draw a small red indicator arrow on the border for North
+    if (dir.isNorth) {
+      ctxMinimap.save();
+      ctxMinimap.translate(dx, dy);
+      ctxMinimap.rotate(dir.angle + Math.PI / 2); // Rotate to point inward
+      ctxMinimap.fillStyle = '#ff3b30';
+      ctxMinimap.beginPath();
+      ctxMinimap.moveTo(0, 7);
+      ctxMinimap.lineTo(-3, 11);
+      ctxMinimap.lineTo(3, 11);
+      ctxMinimap.closePath();
+      ctxMinimap.fill();
+      ctxMinimap.restore();
+    }
+  });
 }
 
 /**
@@ -419,4 +570,38 @@ export function hideLoadingScreen() {
       loader.style.display = 'none';
     }, 1000);
   }
+}
+
+/**
+ * Displays a high-end location discovery overlay for entering cities or kingdoms
+ * @param {string} title - The name of the city/kingdom
+ * @param {string} type - The location type descriptor (e.g. "TERRITORY DISCOVERED", "CITY ENTERED")
+ */
+export function showDiscoveryBanner(title, type) {
+  const existing = document.querySelector('.location-banner');
+  if (existing) {
+    existing.remove();
+  }
+
+  const banner = document.createElement('div');
+  banner.className = 'location-banner';
+
+  const subtitle = document.createElement('div');
+  subtitle.className = 'location-banner-subtitle';
+  subtitle.textContent = type;
+
+  const mainTitle = document.createElement('h2');
+  mainTitle.className = 'location-banner-title';
+  mainTitle.textContent = title;
+
+  banner.appendChild(subtitle);
+  banner.appendChild(mainTitle);
+
+  document.body.appendChild(banner);
+
+  setTimeout(() => {
+    if (banner.parentNode) {
+      banner.remove();
+    }
+  }, 4000);
 }
